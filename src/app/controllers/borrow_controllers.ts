@@ -68,7 +68,54 @@ borrowRouter.post("/", async (req: Request, res: Response) => {
 
 
 borrowRouter.get("/", async (req: Request, res: Response) =>{
+  try {
+    const bookInfoBorrow = await borrowModel.aggregate([
+      {
+        $lookup:{
+          from: "books",     // target collection name
+      localField: "title", // field in books
+      foreignField: "_id",  // field in authors
+      as: "authorDetails"   // output array field
+        }
+      },
+      {
+      $group:{
+        _id:"$book",
+        totalQuantity:{
+          $sum:"$quantity"
+        }
+      }
+    },
 
+    // {
+    //   $project:{
+    //     "$book.title":1,
+    //     "$book.isbn":1
+    //   }
+    // }
+  ])
+  if (!bookInfoBorrow) {
+      res.status(404).json({
+        success: false,
+        message: "summary of borrowed books is not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Request for summary of borrowed books successfully fetched",
+      data: bookInfoBorrow,
+    });
+
+
+
+  } catch (error) {
+    res.status(400).json({
+      message: "Request for summary of borrowed books is faild",
+      success: false,
+      error,
+    });
+  }
 })
 
 
