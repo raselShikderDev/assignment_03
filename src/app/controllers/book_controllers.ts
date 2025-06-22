@@ -1,22 +1,29 @@
-import express, { Request, Response } from "express"
+import express, { Request, Response } from "express";
 import { bookModel } from "../models/book_Model";
 import { TSort } from "../types/book_types";
 import { z } from "zod";
-const bookRouter = express.Router()
+const bookRouter = express.Router();
 
 const bookZod = z.object({
   title: z.string(),
   author: z.string(),
-  genre: z.enum(["FICTION", "NON_FICTION", "SCIENCE", "HISTORY", "BIOGRAPHY", "FANTASY"]),
+  genre: z.enum([
+    "FICTION",
+    "NON_FICTION",
+    "SCIENCE",
+    "HISTORY",
+    "BIOGRAPHY",
+    "FANTASY",
+  ]),
   isbn: z.string(),
   description: z.string().optional(),
   copies: z.number().min(0),
   available: z.boolean(),
-})
+});
 
- const bookUpdateZodSchema = bookZod.partial();
+const bookUpdateZodSchema = bookZod.partial();
 
- export const queryZodSchema = z.object({
+export const queryZodSchema = z.object({
   filter: z.string().optional(),
   sortBy: z.string().optional(),
   sort: z.enum(["asc", "desc"]).optional(),
@@ -24,9 +31,8 @@ const bookZod = z.object({
 });
 
 const paramsZodSchema = z.object({
-  bookId: z.string().length(24, "Invalid book ID"),
+  bookId: z.string().length(24),
 });
-
 
 bookRouter.post("/", async (req: Request, res: Response) => {
   try {
@@ -56,7 +62,6 @@ bookRouter.post("/", async (req: Request, res: Response) => {
   }
 });
 
-
 bookRouter.get("/", async (req: Request, res: Response) => {
   try {
     const parsedQuery = await queryZodSchema.parseAsync(req.query);
@@ -69,7 +74,7 @@ bookRouter.get("/", async (req: Request, res: Response) => {
     const refinelimit = parseInt(limit.toString());
 
     const userQuery: Record<string, any> = {};
-    if(filter) userQuery.genre = filter.toUpperCase();
+    if (filter) userQuery.genre = filter.toUpperCase();
 
     const sortOptions: Record<string, -1 | 1> = {
       [sortBy]: sortedValue === "desc" ? -1 : 1,
@@ -80,7 +85,7 @@ bookRouter.get("/", async (req: Request, res: Response) => {
       .sort(sortOptions)
       .limit(refinelimit);
 
-      // const result = await bookZod.parseAsync(searchResult)
+    // const result = await bookZod.parseAsync(searchResult)
 
     res.status(200).json({
       success: true,
@@ -96,26 +101,27 @@ bookRouter.get("/", async (req: Request, res: Response) => {
   }
 });
 
-
-bookRouter.get("/:bookId", async (req: Request, res: Response) =>{
+bookRouter.get("/:bookId", async (req: Request, res: Response) => {
   try {
-    const bookId = await paramsZodSchema.parseAsync(req.params.bookId)
-    if(!bookId) {
-      res.status(404).json({
-      success: false,
-      message: `Book Id not provided`,
+    const { bookId } = await paramsZodSchema.parseAsync({
+      bookId: req.params.bookId,
     });
+    if (!bookId) {
+      res.status(404).json({
+        success: false,
+        message: `Book Id not provided`,
+      });
     }
 
-  console.log(bookId)
-  const searchResult = await bookModel.findById(bookId)
-   if (!searchResult || Object.keys(searchResult).length === 0) {
+    console.log(bookId);
+    const searchResult = await bookModel.findById(bookId);
+    if (!searchResult || Object.keys(searchResult).length === 0) {
       res.status(404).json({
         success: false,
         message: `Book with Id ${bookId} not found`,
       });
     }
-  res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Books retrieved successfully",
       data: searchResult,
@@ -127,36 +133,37 @@ bookRouter.get("/:bookId", async (req: Request, res: Response) =>{
       error,
     });
   }
-})
+});
 
-
-
-bookRouter.patch(":bookId", async (req: Request, res: Response) =>{
+bookRouter.patch("/:bookId", async (req: Request, res: Response) => {
   try {
-
-    const bookId = await paramsZodSchema.parseAsync(req.params.bookId)
-    if(!bookId) {
+    const { bookId } = await paramsZodSchema.parseAsync({
+      bookId: req.params.bookId,
+    });
+    if (!bookId) {
       res.status(404).json({
-      success: false,
-      message: `Book Id not provided`,
-    });
+        success: false,
+        message: `Book Id not provided`,
+      });
     }
-    
+
     const updateBook = await bookUpdateZodSchema.parseAsync(req.body);
-    if(Object.keys(updateBook).length === 0 || !updateBook) {
+    if (Object.keys(updateBook).length === 0 || !updateBook) {
       res.status(400).json({
-      success: false,
-      message: `Updated information is not found`,
-    });
+        success: false,
+        message: `Updated information is not found`,
+      });
     }
-  const searchResult = await bookModel.findByIdAndUpdate(bookId, updateBook, {new:true})
-    if (!searchResult  || Object.keys(searchResult).length === 0) {
+    const searchResult = await bookModel.findByIdAndUpdate(bookId, updateBook, {
+      new: true,
+    });
+    if (!searchResult || Object.keys(searchResult).length === 0) {
       res.status(404).json({
         success: false,
         message: `Book with Id ${bookId} not found`,
       });
     }
-  res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Book updated successfully",
       data: searchResult,
@@ -168,20 +175,20 @@ bookRouter.patch(":bookId", async (req: Request, res: Response) =>{
       error,
     });
   }
-})
+});
 
-
-bookRouter.delete("/:bookId", async (req: Request, res: Response) =>{
-
+bookRouter.delete("/:bookId", async (req: Request, res: Response) => {
   try {
-    const bookId = await paramsZodSchema.parseAsync(req.params.bookId)
-    if(!bookId) {
-      res.status(404).json({
-      success: false,
-      message: `Book Id not provided`,
+    const { bookId } = await paramsZodSchema.parseAsync({
+      bookId: req.params.bookId,
     });
+    if (!bookId) {
+      res.status(404).json({
+        success: false,
+        message: `Book Id not provided`,
+      });
     }
-    const deletedBook = await bookModel.findByIdAndDelete(bookId)    
+    const deletedBook = await bookModel.findByIdAndDelete(bookId);
 
     if (!deletedBook || Object.keys(deletedBook).length === 0) {
       res.status(404).json({
@@ -196,14 +203,12 @@ bookRouter.delete("/:bookId", async (req: Request, res: Response) =>{
       data: deletedBook,
     });
   } catch (error) {
-     res.status(400).json({
+    res.status(400).json({
       message: "Deleting book is faild",
       success: false,
       error,
     });
   }
-})
+});
 
-
-
-export default bookRouter
+export default bookRouter;
