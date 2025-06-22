@@ -9,9 +9,6 @@ app.use("/api/borrow", borrowRouter)
 
 
 app.get("/", (req: Request, res: Response) => {
-  // res.send(
-  //   "Welcome to Library Management API with Express, TypeScript & MongoDB"
-  // );
   res.send(`
     <!DOCTYPE html>
     <html lang="en">
