@@ -2,14 +2,18 @@ import express, { Request, Response } from "express";
 import { bookModel } from "../models/book_Model";
 import { borrowModel } from "../models/borrow_model";
 const borrowRouter = express.Router();
+import { z } from "zod";
 
+const borrowZodSchema = z.object({
+  book: z.string().length(24, "Invalid book ID"),
+  quantity: z.number().int().min(1, "Quantity must be at least 1"),
+  dueDate: z.coerce.date(),
+});
 
-
-
-// Problem 6. Borrow a Book
 borrowRouter.post("/", async (req: Request, res: Response) => {
   try {
-    if (!req.body || Object.keys(req.body).length === 0) {
+    const body = await borrowZodSchema.parseAsync(req.body);
+    if (!body || Object.keys(body).length === 0) {
       res.status(404).json({
         success: false,
         message: `Nessecery information of borrowing book is not provided`,
@@ -29,7 +33,7 @@ borrowRouter.post("/", async (req: Request, res: Response) => {
     if (!createBorrowRecord) {
       res.status(404).json({
         success: false,
-        message: "Creating borrow record is faild",
+        message: "Book borrowing is faild",
       });
     }
 
@@ -48,67 +52,54 @@ borrowRouter.post("/", async (req: Request, res: Response) => {
 });
 
 
-
-// problem - 7 Borrowed Books Summary (Using Aggregation)
-// GET /api/borrow
-
-// Purpose:
-
-// Return a summary of borrowed books, including:
-
-// Total borrowed quantity per book (totalQuantity)
-// Book details: title and isbn
-// Details:
-
-// Use MongoDB aggregation pipeline to:
-
-// Group borrow records by book
-// Sum total quantity borrowed per book
-// Return book info and total borrowed quantity
-
-
-borrowRouter.get("/", async (req: Request, res: Response) =>{
+borrowRouter.get("/", async (req: Request, res: Response) => {
   try {
     const bookInfoBorrow = await borrowModel.aggregate([
       {
-        $lookup:{
-          from: "books",     // target collection name
-      localField: "title", // field in books
-      foreignField: "_id",  // field in authors
-      as: "authorDetails"   // output array field
-        }
+        $lookup: {
+          from: "books",
+          localField: "book",
+          foreignField: "_id",
+          as: "bookDetails",
+        },
+      },
+      { $unwind: "$bookDetails" },
+      {
+        $group: {
+          _id: "$bookDetails.title",
+          totalQuantity: { $sum: "$quantity" },
+          isbn: { $first: "$bookDetails.isbn" },
+        },
       },
       {
-      $group:{
-        _id:"$book",
-        totalQuantity:{
-          $sum:"$quantity"
-        }
-      }
-    },
+        $project: {
+          _id: 0,
+          book: {
+            title: "$_id",
+            isbn: "$isbn",
+          },
+          totalQuantity: 1,
+        },
+      },
+    ]);
 
-    // {
-    //   $project:{
-    //     "$book.title":1,
-    //     "$book.isbn":1
-    //   }
-    // }
-  ])
-  if (!bookInfoBorrow) {
+    if (!bookInfoBorrow) {
       res.status(404).json({
         success: false,
         message: "summary of borrowed books is not found",
       });
     }
 
+    const summeryInOrder = bookInfoBorrow.map((item) => ({
+      book: item.book,
+      totalQuantity: item.totalQuantity,
+    }));
+
     res.status(200).json({
       success: true,
-      message: "Request for summary of borrowed books successfully fetched",
-      data: bookInfoBorrow,
+      message: "Borrowed books summary retrieved successfully",
+      data: summeryInOrder,
     });
-
-
-
   } catch (error) {
     res.status(400).json({
       message: "Request for summary of borrowed books is faild",
@@ -116,8 +107,6 @@ borrowRouter.get("/", async (req: Request, res: Response) =>{
       error,
     });
   }
-})
-
-
+});
 
 export default borrowRouter;
