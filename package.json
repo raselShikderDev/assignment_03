@@ -1,11 +1,11 @@
 {
   "name": "assignment03",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "ts-node-dev --respawn --transpile-only ./src/server.ts",
-    "start": "ts-node ./src/server.ts"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only ./src/server.ts"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +16,6 @@
     "express": "^5.1.0",
     "mongodb": "^6.17.0",
     "mongoose": "^8.16.0",
-    "ts-node": "^10.9.2",
     "zod": "^3.25.67"
   },
   "devDependencies": {
