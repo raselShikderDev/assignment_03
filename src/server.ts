@@ -16,10 +16,11 @@ async function main() {
 
   // Connecting with server
   try {
+    if (!process.env.VERCEL) {
     app.listen(port, () => {
       console.log(`App is listening on http://localhost:${port}`);
-      console.log("Server has successfully connected");
     });
+  }
   } catch (error: any) {
     console.error("Failed to connect to MongoDB:", error);
     process.exit(1);
