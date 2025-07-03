@@ -24,8 +24,4 @@ const borrowSchema = new mongoose.Schema<IBorrowInterface>(
   }
 );
 
-borrowSchema.static("findById", async function bookAvailablity() {
-  console.log(`[DEBUG - this of post request : ${this}]`);
-});
-
 export const borrowModel = mongoose.model("Borrows", borrowSchema);

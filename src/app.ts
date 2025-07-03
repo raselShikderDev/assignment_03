@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import bookRouter from "./app/controllers/book_controllers";
 import borrowRouter from "./app/controllers/borrow_controllers";
+import globalErrorHandler from "./app/middleware/globalError";
 const app = express();
 
 app.use(express.json());
@@ -71,6 +72,7 @@ app.get("/", (req: Request, res: Response) => {
   `);
 });
 
+bookRouter.use(globalErrorHandler);
 
 
 export default app;

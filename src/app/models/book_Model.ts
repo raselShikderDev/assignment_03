@@ -38,11 +38,11 @@ const bookSchema = new mongoose.Schema<IBookInterface>(
         validator: Number.isInteger,
         message: "{VALUE} is not a interger number",
       },
-      min: [0, "Copies must be a positive number"],
+      min: [0, "Copies must be a non-negative number"],
     },
     available: {
       type: Boolean,
-      default: false,
+      default: true,
     },
   },
   {
@@ -51,25 +51,41 @@ const bookSchema = new mongoose.Schema<IBookInterface>(
   }
 );
 
-bookSchema.static("bookAvailablity", async function bookAvailablity(reqBook) {
-  const { book, quantity, dueDate} = reqBook;
-  const userRequestBook = await this.findById(book);
-  if (!userRequestBook) return;
-  console.log("[DEBUG] - From static before operation: ", userRequestBook);
-  if (userRequestBook.copies === 0 || userRequestBook.copies < quantity) return;
-  userRequestBook.copies = userRequestBook.copies - quantity;
-  if (userRequestBook.copies === 0) userRequestBook.available = false;
-   await userRequestBook.save();
-  console.log("[DEBUG] - From static after operation: ", userRequestBook);
-  return { book, quantity, dueDate};
+bookSchema.pre('save', function(next) {
+  if (this.isModified('copies') || this.isNew) { 
+    this.available = this.copies > 0;
+  }
+  next();
 });
 
-// bookSchema.statics.checkAvailability = async function (book: string, quantity: number) {
-//   const book = await this.findById(book);
-//   if (!book) return null;
-//   if (book.copies < quantity) return null; // Not enough copies
-//   return book;
-// };
+bookSchema.static("bookAvailablity", async function bookAvailablity(reqBook) {
+  const { book, quantity, dueDate} = reqBook;
+  const userRequestBook = await this.findOneAndUpdate(
+    {
+      _id:book,
+      copies:{
+        $gte:quantity
+      }
+    },
+    {
+      $inc:{copies:-quantity},
+      $set:{
+        available:{
+          $cond:{
+            if: {$eq:["$copies", quantity]},
+            then:false,
+            else:true,
+          }
+        }
+      }
+    },
+    {new:true}
+  );
+  
+  if (!userRequestBook) return null;
+
+  return { book, quantity, dueDate};
+});
 
 export const bookModel = mongoose.model<IBookInterface, IBookAvailablityCheak>(
   "Books",

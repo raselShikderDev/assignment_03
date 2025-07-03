@@ -1,83 +1,46 @@
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { bookModel } from "../models/book_Model";
 import { TSort } from "../types/book_types";
-import { z } from "zod";
+import { bookUpdateZodSchema, bookZod, filterQueryZodSchema, paramsZodSchema } from "../zodSchema/bokZodSchema";
 const bookRouter = express.Router();
 
-const bookZod = z.object({
-  title: z.string(),
-  author: z.string(),
-  genre: z.enum([
-    "FICTION",
-    "NON_FICTION",
-    "SCIENCE",
-    "HISTORY",
-    "BIOGRAPHY",
-    "FANTASY",
-  ]),
-  isbn: z.string(),
-  description: z.string().optional(),
-  copies: z.number().min(0),
-  available: z.boolean(),
-});
 
-const bookUpdateZodSchema = bookZod.partial();
+bookRouter.post(
+  "/",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const book = await bookZod.parseAsync(req.body);
 
-export const queryZodSchema = z.object({
-  filter: z.string().optional(),
-  sortBy: z.string().optional(),
-  sort: z.enum(["asc", "desc"]).optional(),
-  limit: z.string().regex(/^\d+$/).optional(),
-});
+      const newBook = new bookModel(book);
 
-const paramsZodSchema = z.object({
-  bookId: z.string().length(24),
-});
+      const savedBook = await newBook.save();
 
-bookRouter.post("/", async (req: Request, res: Response) => {
-  try {
-    const book = await bookZod.parseAsync(req.body);
-    if (!book || Object.keys(book).length === 0) {
-      res.status(400).json({
+      res.status(201).json({
         success: true,
-        message: "Book not found",
-        data: book,
+        message: "Book created successfully",
+        data: savedBook,
       });
+    } catch (error: any) {
+      next(error);
     }
-    const newBook = new bookModel(book);
-
-    const savedBook = await newBook.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Book created successfully",
-      data: savedBook,
-    });
-  } catch (error: any) {
-    res.status(400).json({
-      message: "Validation failed",
-      success: false,
-      error,
-    });
   }
-});
+);
 
-bookRouter.get("/", async (req: Request, res: Response) => {
+bookRouter.get("/", async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const parsedQuery = await queryZodSchema.parseAsync(req.query);
-    let { filter, sortBy = "createdAt", sort, limit = "10" } = parsedQuery;
-    if (filter) filter = filter.toString().toUpperCase();
+    const parsedQuery = await filterQueryZodSchema.parseAsync(req.query);
+    let { filter, sortBy, sort, limit } = parsedQuery;
 
-    if (sortBy) sortBy = sortBy.toString();
+    const actualSortBy = sortBy || "createdAt";
     const sortedValue: TSort = sort === "desc" ? "desc" : "asc";
 
-    const refinelimit = parseInt(limit.toString());
+    const refinelimit = parseInt(limit);
 
     const userQuery: Record<string, any> = {};
-    if (filter) userQuery.genre = filter.toUpperCase();
+    if (filter) userQuery.genre = filter;
 
     const sortOptions: Record<string, -1 | 1> = {
-      [sortBy]: sortedValue === "desc" ? -1 : 1,
+      [actualSortBy]: sortedValue === "desc" ? -1 : 1,
     };
 
     const searchResult = await bookModel
@@ -85,130 +48,119 @@ bookRouter.get("/", async (req: Request, res: Response) => {
       .sort(sortOptions)
       .limit(refinelimit);
 
-    // const result = await bookZod.parseAsync(searchResult)
-
     res.status(200).json({
       success: true,
       message: "Books retrieved successfully",
       data: searchResult,
     });
   } catch (error) {
-    res.status(400).json({
-      message: "Books retrieving is faild",
-      success: false,
-      error,
-    });
+    next(error);
   }
 });
 
-bookRouter.get("/:bookId", async (req: Request, res: Response) => {
-  try {
-    const { bookId } = await paramsZodSchema.parseAsync({
-      bookId: req.params.bookId,
-    });
-    if (!bookId) {
-      res.status(404).json({
-        success: false,
-        message: `Book Id not provided`,
+bookRouter.get(
+  "/:bookId",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { bookId } = await paramsZodSchema.parseAsync({
+        bookId: req.params.bookId,
       });
-    }
 
-    console.log(bookId);
-    const searchResult = await bookModel.findById(bookId);
-    if (!searchResult || Object.keys(searchResult).length === 0) {
-      res.status(404).json({
-        success: false,
-        message: `Book with Id ${bookId} not found`,
+      const searchResult = await bookModel.findById(bookId);
+      if (!searchResult) {
+        res.status(404).json({
+          success: false,
+          message: `Book with Id ${bookId} not found`,
+          error: {
+            name: "ResourceNotFoundError",
+            message: "The specified book could not be found.",
+          },
+        });
+      }
+      res.status(200).json({
+        success: true,
+        message: "Books retrieved successfully",
+        data: searchResult,
       });
+    } catch (error) {
+      next(error);
     }
-    res.status(200).json({
-      success: true,
-      message: "Books retrieved successfully",
-      data: searchResult,
-    });
-  } catch (error) {
-    res.status(400).json({
-      message: "Books retrieving is faild",
-      success: false,
-      error,
-    });
   }
-});
+);
 
-bookRouter.patch("/:bookId", async (req: Request, res: Response) => {
-  try {
-    const { bookId } = await paramsZodSchema.parseAsync({
-      bookId: req.params.bookId,
-    });
-    if (!bookId) {
-      res.status(404).json({
-        success: false,
-        message: `Book Id not provided`,
+bookRouter.patch(
+  "/:bookId",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { bookId } = await paramsZodSchema.parseAsync({
+        bookId: req.params.bookId,
       });
-    }
-
-    const updateBook = await bookUpdateZodSchema.parseAsync(req.body);
-    if (Object.keys(updateBook).length === 0 || !updateBook) {
-      res.status(400).json({
-        success: false,
-        message: `Updated information is not found`,
+      const updateBook = await bookUpdateZodSchema.parseAsync(req.body);
+      if (Object.keys(updateBook).length === 0) {
+        res.status(400).json({
+          success: false,
+          message: `No update information provided in the request body.`,
+        });
+        return;
+      }
+      const searchResult = await bookModel.findByIdAndUpdate(
+        bookId,
+        updateBook,
+        {
+          new: true,
+        }
+      );
+      if (!searchResult) {
+        res.status(404).json({
+          success: false,
+          message: `Book with Id ${bookId} not found`,
+          error: {
+            name: "ResourceNotFoundError",
+            message: "The specified book could not be found.",
+          },
+        });
+        return;
+      }
+      res.status(200).json({
+        success: true,
+        message: "Book updated successfully",
+        data: searchResult,
       });
+    } catch (error) {
+      next(error);
     }
-    const searchResult = await bookModel.findByIdAndUpdate(bookId, updateBook, {
-      new: true,
-    });
-    if (!searchResult || Object.keys(searchResult).length === 0) {
-      res.status(404).json({
-        success: false,
-        message: `Book with Id ${bookId} not found`,
-      });
-    }
-    res.status(200).json({
-      success: true,
-      message: "Book updated successfully",
-      data: searchResult,
-    });
-  } catch (error) {
-    res.status(400).json({
-      message: "Updating book is faild",
-      success: false,
-      error,
-    });
   }
-});
+);
 
-bookRouter.delete("/:bookId", async (req: Request, res: Response) => {
-  try {
-    const { bookId } = await paramsZodSchema.parseAsync({
-      bookId: req.params.bookId,
-    });
-    if (!bookId) {
-      res.status(404).json({
-        success: false,
-        message: `Book Id not provided`,
+bookRouter.delete(
+  "/:bookId",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { bookId } = await paramsZodSchema.parseAsync({
+        bookId: req.params.bookId,
       });
-    }
-    const deletedBook = await bookModel.findByIdAndDelete(bookId);
+      const deletedBook = await bookModel.findByIdAndDelete(bookId);
 
-    if (!deletedBook || Object.keys(deletedBook).length === 0) {
-      res.status(404).json({
-        success: false,
-        message: `Book with Id ${bookId} not found`,
+      if (!deletedBook) {
+        res.status(404).json({
+          success: false,
+          message: `Book with Id ${bookId} not found`,
+          error: {
+            name: "ResourceNotFoundError",
+            message: "The specified book could not be found.",
+          },
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Book deleted successfully",
+        data: deletedBook,
       });
+    } catch (error) {
+      next(error);
     }
-
-    res.status(200).json({
-      success: true,
-      message: "Book deleted successfully",
-      data: deletedBook,
-    });
-  } catch (error) {
-    res.status(400).json({
-      message: "Deleting book is faild",
-      success: false,
-      error,
-    });
   }
-});
+);
 
 export default bookRouter;
